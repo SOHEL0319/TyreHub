@@ -1,15 +1,26 @@
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, where, writeBatch, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, query, writeBatch, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const PRODUCTS_COLLECTION = 'products';
 
+const getDb = () => {
+  if (!db) {
+    throw new Error(
+      'Firestore database is not initialized. Please verify that VITE_FIREBASE_* environment variables are set in your Vercel Project Settings.'
+    );
+  }
+  return db;
+};
+
 export const getProducts = async () => {
-  const querySnapshot = await getDocs(collection(db, PRODUCTS_COLLECTION));
+  const currentDb = getDb();
+  const querySnapshot = await getDocs(collection(currentDb, PRODUCTS_COLLECTION));
   return querySnapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
 };
 
 export const getProductById = async (id) => {
-  const docRef = doc(db, PRODUCTS_COLLECTION, id);
+  const currentDb = getDb();
+  const docRef = doc(currentDb, PRODUCTS_COLLECTION, id);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
     return { _id: docSnap.id, ...docSnap.data() };
@@ -18,23 +29,27 @@ export const getProductById = async (id) => {
 };
 
 export const addProduct = async (productData) => {
-  const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), productData);
+  const currentDb = getDb();
+  const docRef = await addDoc(collection(currentDb, PRODUCTS_COLLECTION), productData);
   return { _id: docRef.id, ...productData };
 };
 
 export const updateProduct = async (id, productData) => {
-  const docRef = doc(db, PRODUCTS_COLLECTION, id);
+  const currentDb = getDb();
+  const docRef = doc(currentDb, PRODUCTS_COLLECTION, id);
   await updateDoc(docRef, productData);
   return { _id: id, ...productData };
 };
 
 export const deleteProduct = async (id) => {
-  const docRef = doc(db, PRODUCTS_COLLECTION, id);
+  const currentDb = getDb();
+  const docRef = doc(currentDb, PRODUCTS_COLLECTION, id);
   await deleteDoc(docRef);
   return id;
 };
 
 export const getAdminStats = async () => {
+  const currentDb = getDb();
   const products = await getProducts();
   const categories = new Set(products.map(p => p.category));
   const lowStock = products.filter(p => (Number(p.stock) || 0) <= 5 && (Number(p.stock) || 0) > 0);
@@ -43,7 +58,7 @@ export const getAdminStats = async () => {
   let totalSales = 0;
   let totalRevenue = 0;
   try {
-    const salesSnap = await getDocs(collection(db, 'sales'));
+    const salesSnap = await getDocs(collection(currentDb, 'sales'));
     totalSales = salesSnap.docs.length;
     salesSnap.forEach(doc => {
       const s = doc.data();
@@ -55,7 +70,7 @@ export const getAdminStats = async () => {
 
   let totalCustomers = 0;
   try {
-    const usersSnap = await getDocs(collection(db, 'users'));
+    const usersSnap = await getDocs(collection(currentDb, 'users'));
     totalCustomers = usersSnap.docs.length;
   } catch (err) {
     console.error('Error fetching customers stats:', err);
@@ -63,7 +78,7 @@ export const getAdminStats = async () => {
 
   let totalEnquiries = 0;
   try {
-    const enqSnap = await getDocs(collection(db, 'enquiries'));
+    const enqSnap = await getDocs(collection(currentDb, 'enquiries'));
     totalEnquiries = enqSnap.docs.length;
   } catch (err) {
     console.error('Error fetching enquiries stats:', err);
@@ -83,12 +98,14 @@ export const getAdminStats = async () => {
 };
 
 export const addEnquiry = async (enquiryData) => {
-  const docRef = await addDoc(collection(db, 'enquiries'), enquiryData);
+  const currentDb = getDb();
+  const docRef = await addDoc(collection(currentDb, 'enquiries'), enquiryData);
   return { _id: docRef.id, ...enquiryData };
 };
 
 export const saveUserToFirestore = async (user) => {
-  const userRef = doc(db, 'users', user.uid);
+  const currentDb = getDb();
+  const userRef = doc(currentDb, 'users', user.uid);
   
   const isAdmin = user.email && user.email.toLowerCase().trim() === 'rasheedtyresplanet@gmail.com';
   const role = isAdmin ? 'admin' : 'user';
@@ -107,27 +124,32 @@ export const saveUserToFirestore = async (user) => {
 };
 
 export const getSales = async () => {
-  const querySnapshot = await getDocs(collection(db, 'sales'));
+  const currentDb = getDb();
+  const querySnapshot = await getDocs(collection(currentDb, 'sales'));
   return querySnapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
 };
 
 export const getEnquiries = async () => {
-  const querySnapshot = await getDocs(collection(db, 'enquiries'));
+  const currentDb = getDb();
+  const querySnapshot = await getDocs(collection(currentDb, 'enquiries'));
   return querySnapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
 };
 
 export const updateEnquiry = async (id, data) => {
-  const docRef = doc(db, 'enquiries', id);
+  const currentDb = getDb();
+  const docRef = doc(currentDb, 'enquiries', id);
   await updateDoc(docRef, data);
 };
 
 export const deleteEnquiry = async (id) => {
-  const docRef = doc(db, 'enquiries', id);
+  const currentDb = getDb();
+  const docRef = doc(currentDb, 'enquiries', id);
   await deleteDoc(docRef);
 };
 
 export const subscribeToSales = (callback) => {
-  const q = query(collection(db, 'sales'), orderBy('date', 'desc'));
+  const currentDb = getDb();
+  const q = query(collection(currentDb, 'sales'), orderBy('date', 'desc'));
   
   return onSnapshot(q, (snapshot) => {
     const sales = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
@@ -139,12 +161,14 @@ export const subscribeToSales = (callback) => {
 };
 
 export const getCustomers = async () => {
-  const querySnapshot = await getDocs(collection(db, 'users'));
+  const currentDb = getDb();
+  const querySnapshot = await getDocs(collection(currentDb, 'users'));
   return querySnapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
 };
 
 export const subscribeToEnquiries = (callback) => {
-  const q = query(collection(db, 'enquiries'), orderBy('createdAt', 'desc'));
+  const currentDb = getDb();
+  const q = query(collection(currentDb, 'enquiries'), orderBy('createdAt', 'desc'));
   
   return onSnapshot(q, (snapshot) => {
     const enquiries = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
@@ -156,14 +180,15 @@ export const subscribeToEnquiries = (callback) => {
 };
 
 export const bulkAddSales = async (salesData) => {
-  const salesRef = collection(db, 'sales');
+  const currentDb = getDb();
+  const salesRef = collection(currentDb, 'sales');
   const chunks = [];
   for (let i = 0; i < salesData.length; i += 500) {
     chunks.push(salesData.slice(i, i + 500));
   }
   
   for (const chunk of chunks) {
-    const currentBatch = writeBatch(db);
+    const currentBatch = writeBatch(currentDb);
     chunk.forEach(sale => {
       const { _id, saleId, ...rest } = sale;
       const idToUse = saleId || _id;
@@ -179,18 +204,21 @@ export const bulkAddSales = async (salesData) => {
 };
 
 export const addSale = async (saleData) => {
-  const docRef = await addDoc(collection(db, 'sales'), saleData);
+  const currentDb = getDb();
+  const docRef = await addDoc(collection(currentDb, 'sales'), saleData);
   return { _id: docRef.id, ...saleData };
 };
 
 export const updateSale = async (id, saleData) => {
-  const docRef = doc(db, 'sales', id);
+  const currentDb = getDb();
+  const docRef = doc(currentDb, 'sales', id);
   await updateDoc(docRef, saleData);
   return { _id: id, ...saleData };
 };
 
 export const deleteSale = async (id) => {
-  const docRef = doc(db, 'sales', id);
+  const currentDb = getDb();
+  const docRef = doc(currentDb, 'sales', id);
   await deleteDoc(docRef);
   return id;
 };
