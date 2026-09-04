@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if the user is an admin
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'rasheedtyresplanet@gmail.com';
+    }
+
+    match /users/{userId} {
+      // Users can read/write their own document. Admins can read/write all.
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /products/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /sales/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    match /enquiries/{document=**} {
+      allow create: if true; // anyone can submit an enquiry
+      allow read, update, delete: if isAdmin();
+    }
+    
+    match /customers/{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
