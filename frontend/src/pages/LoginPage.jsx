@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  fetchSignInMethodsForEmail
+} from 'firebase/auth';
 import { auth } from '../firebase';
 import { saveAdminSession, saveGoogleSession } from '../utils/auth';
 import { saveUserToFirestore } from '../api/firestoreService';
+import { isKnownGoogleAccount, recordGoogleUserEmail } from '../utils/authLinking';
 
 const ADMIN_EMAIL = 'rasheedtyresplanet@gmail.com';
 
@@ -12,7 +19,8 @@ export default function LoginPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  
+  const [showPassword, setShowPassword] = useState(false);
+
   // Password Reset Modal State
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -26,16 +34,20 @@ export default function LoginPage() {
 
   const getFirebaseErrorMessage = (err) => {
     switch (err.code) {
-      case 'auth/invalid-credential':
       case 'auth/wrong-password':
+        return 'Incorrect password. Please try again or reset your password.';
       case 'auth/user-not-found':
-        return 'Invalid email or password. Please try again.';
+        return 'No account found with this email. Please check the email or sign in with Google.';
+      case 'auth/invalid-credential':
+        return 'Invalid email or password. If this account was registered with Google, please use Continue with Google.';
       case 'auth/invalid-email':
         return 'Please enter a valid email address.';
       case 'auth/user-disabled':
-        return 'This account has been disabled.';
+        return 'This account has been disabled. Please contact support.';
       case 'auth/too-many-requests':
         return 'Too many failed attempts. Please try again later or reset your password.';
+      case 'auth/network-request-failed':
+        return 'Network connection failed. Please check your internet connection and try again.';
       case 'auth/popup-closed-by-user':
         return 'Sign-in cancelled. Please complete Google sign-in.';
       default:
@@ -51,7 +63,7 @@ export default function LoginPage() {
       email: user.email,
       role: isAdmin ? 'admin' : 'user',
     }, token);
-    
+
     if (isAdmin) {
       navigate('/admin');
     } else {
@@ -63,20 +75,50 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    const email = form.email.trim();
+
     try {
-      const result = await signInWithEmailAndPassword(auth, form.email.trim(), form.password);
+      const result = await signInWithEmailAndPassword(auth, email, form.password);
       const user = result.user;
-      
+
       try {
         await saveUserToFirestore(user);
       } catch (fsError) {
         console.warn('Could not save user to Firestore:', fsError);
       }
-      
+
       checkAdminAndRedirect(user, user.accessToken, saveAdminSession);
     } catch (err) {
       console.error('Firebase Email Login Error:', err);
-      setError(getFirebaseErrorMessage(err));
+
+      let isGoogleAccount = false;
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+        if (methods.includes('google.com') && !methods.includes('password')) {
+          isGoogleAccount = true;
+        }
+      } catch (methodsErr) {
+        console.warn('Could not fetch sign-in methods:', methodsErr);
+      }
+
+      // Check if known Google account (sohelns1786@gmail.com, rasheedtyresplanet@gmail.com, or previously signed in with Google)
+      if (isKnownGoogleAccount(email) && (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password')) {
+        isGoogleAccount = true;
+      }
+
+      if (isGoogleAccount) {
+        setError({
+          type: 'google-only',
+          title: 'Google Sign-In Required',
+          message: 'This account is registered with Google. Sign in with Google first to add a password.'
+        });
+      } else {
+        setError({
+          type: 'general',
+          title: 'Sign In Failed',
+          message: getFirebaseErrorMessage(err)
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -89,17 +131,24 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      
+
+      // Track that this email is a valid Google account
+      recordGoogleUserEmail(user.email);
+
       try {
         await saveUserToFirestore(user);
       } catch (fsError) {
         console.warn('Could not save user to Firestore:', fsError);
       }
-      
+
       checkAdminAndRedirect(user, user.accessToken, saveGoogleSession);
     } catch (err) {
       console.error('Firebase Google Login Error:', err);
-      setError(getFirebaseErrorMessage(err));
+      setError({
+        type: 'general',
+        title: 'Google Sign-In Failed',
+        message: getFirebaseErrorMessage(err)
+      });
     } finally {
       setGoogleLoading(false);
     }
@@ -137,8 +186,30 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="mb-6 rounded-xl bg-red-500/10 p-4 text-center text-xs font-semibold text-red-400 border border-red-500/20">
-            {error}
+          <div className={`mb-6 rounded-2xl p-4 text-xs font-semibold border ${error.type === 'google-only'
+              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+              : 'bg-red-500/10 text-red-400 border-red-500/20'
+            }`}>
+            <div className="flex items-start gap-3">
+              <span className="text-base">{error.type === 'google-only' ? '⚠️' : '❌'}</span>
+              <div className="flex-1 text-left">
+                <p className="font-bold text-white mb-1">
+                  {error.title || (error.type === 'google-only' ? 'Google Sign-In Required' : 'Authentication Error')}
+                </p>
+                <p className="text-white/80 leading-relaxed">{error.message || error}</p>
+                {error.type === 'google-only' && (
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={googleLoading}
+                    className="mt-3 inline-flex items-center gap-2 rounded-full bg-white text-black px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-white/90 transition shadow-md active:scale-95"
+                  >
+                    <span>Continue with Google</span>
+                    <span>→</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -176,15 +247,53 @@ export default function LoginPage() {
                 Forgot?
               </button>
             </div>
-            <input
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              type="password"
-              placeholder="••••••••"
-              className="w-full rounded-xl border border-white/10 bg-black/70 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-red-500 transition"
-            />
+            <div className="relative flex items-center">
+              <input
+                id="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                required
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-white/10 bg-black/70 px-4 py-3 pr-12 text-sm text-white placeholder-white/30 outline-none focus:border-red-500 transition [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
+              />
+              <button
+                type="button"
+                id="toggle-password-visibility"
+                onClick={() => setShowPassword((prev) => !prev)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  zIndex: 30,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  color: '#ffffff'
+                }}
+                className="text-white hover:text-red-400 hover:bg-white/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  /* Eye Off Icon (Visible -> Click to hide) */
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '20px', height: '20px', display: 'block' }}>
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  /* Eye Icon (Hidden -> Click to show) */
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '20px', height: '20px', display: 'block' }}>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
 
           <button

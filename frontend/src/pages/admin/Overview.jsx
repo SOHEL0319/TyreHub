@@ -3,11 +3,15 @@ import { Link } from 'react-router-dom';
 import { getAdminStats } from '../../api/firestoreService';
 import { auth } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getUserProviderInfo } from '../../utils/authLinking';
+import SetPasswordModal from '../../components/SetPasswordModal';
 
 export default function Overview() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [providerInfo, setProviderInfo] = useState({ isGoogle: false, hasPassword: false, providers: [] });
 
   const fetchStats = async () => {
     setLoading(true);
@@ -32,6 +36,7 @@ export default function Overview() {
     if (auth) {
       unsubscribe = onAuthStateChanged(auth, (user) => {
         if (user) {
+          setProviderInfo(getUserProviderInfo(user));
           fetchStats();
         } else {
           setLoading(false);
@@ -92,6 +97,40 @@ export default function Overview() {
             Record Sale
           </Link>
         </div>
+      </div>
+
+      {/* Account Credentials & Direct Login Banner */}
+      <div className={`rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+        !providerInfo.hasPassword
+          ? 'border-amber-500/30 bg-amber-500/10'
+          : 'border-white/10 bg-white/5'
+      }`}>
+        <div className="flex items-start gap-3.5">
+          <span className="text-2xl mt-0.5">{!providerInfo.hasPassword ? '🔐' : '🛡️'}</span>
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              {!providerInfo.hasPassword 
+                ? 'Enable Direct Email & Password Login' 
+                : 'Account Security: Google & Password Login Enabled'}
+            </h3>
+            <p className="text-xs text-white/70 mt-1">
+              {!providerInfo.hasPassword
+                ? 'Your admin account currently authenticates via Google. You can set a password to also log in directly with your email and password.'
+                : 'Your account is configured with both Google Sign-In and direct Email/Password authentication.'}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowPasswordModal(true)}
+          className={`rounded-full px-5 py-2 text-xs font-bold uppercase tracking-wider transition shrink-0 shadow-md ${
+            !providerInfo.hasPassword
+              ? 'bg-amber-500 text-black hover:bg-amber-400'
+              : 'border border-white/20 bg-white/10 text-white hover:bg-white/20'
+          }`}
+        >
+          {!providerInfo.hasPassword ? 'Set Account Password' : 'Change Password'}
+        </button>
       </div>
 
       {/* KPI Cards Grid */}
@@ -169,6 +208,16 @@ export default function Overview() {
           </Link>
         </div>
       )}
+
+      <SetPasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onPasswordLinked={() => {
+          if (auth.currentUser) {
+            setProviderInfo(getUserProviderInfo(auth.currentUser));
+          }
+        }}
+      />
     </div>
   );
 }

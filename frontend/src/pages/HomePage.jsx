@@ -111,22 +111,32 @@ export default function HomePage() {
           className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
         >
           {[
-            { title: 'BIKE TYRES', description: 'Reliable grip for everyday riding.', icon: '🏍️' },
-            { title: 'CAR TYRES', description: 'Comfort, control and road confidence.', icon: '🚗' },
-            { title: 'AUTO TYRES', description: 'Durable tyres for everyday commercial use.', icon: '🛺' },
-            { title: 'LORRY TYRES', description: 'Built for heavy loads and long routes.', icon: '🚚' },
+            { title: 'BIKE TYRES', description: 'Reliable grip for everyday riding.', icon: '🏍️', to: '/category/bike' },
+            { title: 'CAR TYRES', description: 'Comfort, control and road confidence.', icon: '🚗', to: '/category/car' },
+            { title: 'AUTO TYRES', description: 'Durable tyres for everyday commercial use.', icon: '🛺', to: '/category/auto' },
+            { title: 'LORRY TYRES', description: 'Built for heavy loads and long routes.', icon: '🚚', to: '/category/lorry' },
           ].map((item) => (
             <motion.div 
               key={item.title} 
               variants={fadeUpVariant}
-              className="group relative overflow-hidden rounded-2xl border border-white/5 bg-[#1a1a1a] p-6 transition-all duration-300 hover:-translate-y-1.5 hover:border-red-500/30 hover:shadow-[0_10px_30px_rgba(220,38,38,0.1)]"
+              className="h-full"
             >
-              <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-white/5 blur-2xl transition-all duration-300 group-hover:bg-red-500/10" />
-              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-black border border-white/10 text-xl transition-transform duration-300 group-hover:scale-110">
-                {item.icon}
-              </div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-white">{item.title}</h3>
-              <p className="mt-2 text-sm text-white/50">{item.description}</p>
+              <Link
+                to={item.to}
+                className="group relative flex flex-col justify-between h-full overflow-hidden rounded-2xl border border-white/5 bg-[#1a1a1a] p-6 transition-all duration-300 hover:-translate-y-1.5 hover:border-red-500/40 hover:shadow-[0_10px_30px_rgba(220,38,38,0.2)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              >
+                <div className="pointer-events-none absolute -right-4 -top-4 h-24 w-24 rounded-full bg-white/5 blur-2xl transition-all duration-300 group-hover:bg-red-500/15" />
+                <div>
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-black border border-white/10 text-xl transition-transform duration-300 group-hover:scale-110 group-hover:border-red-500/30">
+                    {item.icon}
+                  </div>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-white group-hover:text-red-500 transition-colors flex items-center justify-between">
+                    <span>{item.title}</span>
+                    <span className="text-xs text-white/40 group-hover:text-red-500 transition-all transform group-hover:translate-x-1">→</span>
+                  </h3>
+                  <p className="mt-2 text-sm text-white/50 group-hover:text-white/70 transition-colors">{item.description}</p>
+                </div>
+              </Link>
             </motion.div>
           ))}
         </motion.div>

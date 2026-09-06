@@ -1,16 +1,32 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { getProducts } from '../api/firestoreService';
 
 const vehicleTypes = ['All', 'Bike', 'Car', 'Auto', 'Lorry'];
 const DEFAULT_IMAGE = '/tyres/bridgestone-turanza.jpg';
 
+function normalizeParam(val) {
+  if (!val) return 'All';
+  const lower = val.toLowerCase().trim();
+  if (lower.includes('lorry') || lower.includes('truck') || lower.includes('commercial') || lower.includes('heavy')) return 'Lorry';
+  if (lower.includes('bike') || lower.includes('motorcycle') || lower.includes('scooter') || lower.includes('two-wheeler')) return 'Bike';
+  if (lower.includes('car') || lower.includes('four-wheeler')) return 'Car';
+  if (lower.includes('auto') || lower.includes('three-wheeler') || lower.includes('rickshaw')) return 'Auto';
+  return 'All';
+}
+
 export default function TyresPage() {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+
+  const paramCategory = searchParams.get('category') || searchParams.get('vehicleType') || location.state?.vehicleType;
+  const initialCategory = normalizeParam(paramCategory);
+
   const [allProducts, setAllProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
-    vehicleType: 'All',
+    vehicleType: initialCategory,
     brand: '',
     size: '',
     search: '',
@@ -18,6 +34,12 @@ export default function TyresPage() {
     maxPrice: '',
     sort: ''
   });
+
+  useEffect(() => {
+    if (paramCategory) {
+      setFilters(prev => ({ ...prev, vehicleType: normalizeParam(paramCategory) }));
+    }
+  }, [paramCategory]);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -58,7 +80,22 @@ export default function TyresPage() {
     let result = [...allProducts];
 
     if (filters.vehicleType && filters.vehicleType !== 'All') {
-      result = result.filter(p => (p.vehicleType || '').toLowerCase() === filters.vehicleType.toLowerCase());
+      const vTarget = filters.vehicleType.toLowerCase().trim();
+      result = result.filter(p => {
+        const pVehicle = (p.vehicleType || '').toLowerCase().trim();
+        const pCategory = (p.category || '').toLowerCase().trim();
+        if (vTarget === 'lorry') {
+          return (
+            pVehicle === 'lorry' ||
+            pVehicle === 'truck' ||
+            pVehicle === 'commercial' ||
+            pCategory.includes('lorry') ||
+            pCategory.includes('truck') ||
+            pCategory.includes('commercial')
+          );
+        }
+        return pVehicle === vTarget || pCategory.includes(vTarget);
+      });
     }
 
     if (filters.brand) {
