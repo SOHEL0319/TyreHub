@@ -50,13 +50,13 @@ export default function HomePage() {
             muted
             playsInline
             preload="auto"
-            src="/videos/v.mp4"
+            src="/videos/background.mp4"
             onLoadedData={() => setVideoLoaded(true)}
             onCanPlay={() => setVideoLoaded(true)}
             style={{ objectFit: 'cover', objectPosition: 'center' }}
             className={`absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700 ${videoLoaded ? 'opacity-100' : 'opacity-0'}`}
           >
-            <source src="/videos/v.mp4" type="video/mp4" />
+            <source src="/videos/background.mp4" type="video/mp4" />
           </video>
 
           {/* Layered Cinematic Overlay */}
